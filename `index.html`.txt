@@ -179,7 +179,7 @@
         tg.expand(); // Разворачиваем окно на весь экран
 
         // ⚠️ Укажи IP/домен своего сервера где запущен Python бот
-        const API_URL = "http://ТВОЙ_ИП_СЕРВЕРА:8080/api/active_admins";
+        const API_URL = "https://cacti-chariot-emboss.ngrok-free.dev -> http://localhost:8080 ";
 
         async function loadAdmins() {
             try {
