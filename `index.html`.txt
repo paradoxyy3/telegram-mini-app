@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Активные Админы</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        /* 🎨 НАСТРОЙКИ ЦВЕТОВ (МЕНЯЙ ЗДЕСЬ) */
+        :root {
+            --bg-color: #128c0e;       /* Фон всего приложения (зеленый) */
+            --card-bg: #2c2c2e;        /* Цвет серых карточек */
+            --text-color: #ffffff;     /* Цвет текста */
+            --subtext-color: #aaaaaa;  /* Цвет времени */
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 15px;
+        }
+
+        .header {
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+        }
+
+        .card-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 18px;
+            padding: 12px 15px;
+            display: flex;
+            align-items: center;
+            position: relative;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .avatar-container {
+            position: relative;
+            width: 55px;
+            height: 55px;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+
+        .avatar {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            background-color: #444;
+        }
+
+        /* Зелёный значок онлайна на аве */
+        .online-badge {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 14px;
+            height: 14px;
+            background-color: #2ecc71;
+            border: 2px solid var(--card-bg);
+            border-radius: 50%;
+        }.card-info {
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        .admin-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .admin-desc {
+            font-size: 14px;
+            color: #ddd;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .last-active {
+            font-size: 11px;
+            color: var(--subtext-color);
+            text-align: right;
+            margin-top: 5px;
+        }
+
+        /* Галочка верификации */
+        .verify-badge {
+            position: absolute;
+            bottom: 12px;
+            right: 15px;
+            width: 20px;
+            height: 20px;
+            background-color: #ffffff;
+            color: #000;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* Модальное окно (Полная карточка) */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            z-index: 100;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 320px;
+            text-align: center;
+            position: relative;
+        }
+
+        .modal-avatar {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            margin-bottom: 10px;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 10px; right: 15px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">Last summer</div>
+    <div class="card-list" id="admins-list">
+        <!-- Карточки загрузятся сюда автоматически -->
+    </div>
+
+    <!-- МОДАЛКА ДЛЯ ПОЛНОЙ ИНФОРМАЦИИ -->
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <img class="modal-avatar" id="modal-img" src="" alt="">
+            <h2 id="modal-name"></h2>
+            <p id="modal-desc" style="text-align: left; color: #ccc; font-size: 14px;"></p>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand(); // Разворачиваем окно на весь экран
+
+        // ⚠️ Укажи IP/домен своего сервера где запущен Python бот
+        const API_URL = "http://ТВОЙ_ИП_СЕРВЕРА:8080/api/active_admins";
+
+        async function loadAdmins() {
+            try {
+                const res = await fetch(API_URL);
+                const admins = await res.json();
+                const container = document.getElementById('admins-list');
+                container.innerHTML = '';
+
+                if (admins.length === 0) {
+                    container.innerHTML = '<div style="text-align:center; padding:20px;">😴 Сейчас нет активных админов</div>';
+                    return;
+                }
+
+                admins.forEach(adm => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.onclick = () => openModal(adm);
+
+                    const verifyHtml = adm.is_verified ? '<div class="verify-badge">✓</div>' : '';
+                    const avatarSrc = adm.avatar ? adm.avatar : 'https://via.placeholder.com/150';
+
+                    card.innerHTML = `
+                        <div class="avatar-container">
+                            <img class="avatar" src="${avatarSrc}">
+                            <div class="online-badge"></div>
+                        </div>
+                        <div class="card-info">
+                            <div class="admin-title">${adm.prefix}</div>
+                            <div class="admin-desc">${adm.info}</div>
+                            <div class="last-active">Последняя активность ${adm.mins_ago} мин. назад</div>
+                        </div>
+                        ${verifyHtml}
+                    `;
+                    container.appendChild(card);
+                });
+            } catch (err) {
+                console.error("Ошибка загрузки:", err);
+            }
+        }
+
+        function openModal(adm) {
+            document.getElementById('modal-img').src = adm.avatar || 'https://via.placeholder.com/150';
+            document.getElementById('modal-name').innerText = adm.prefix;
+            document.getElementById('modal-desc').innerText = adm.info;
+            document.getElementById('modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        loadAdmins();
+    </script>
+</body>
+</html>
